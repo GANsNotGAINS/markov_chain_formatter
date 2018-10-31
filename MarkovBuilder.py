@@ -14,8 +14,13 @@ class MarkovBuilder():
         alphabet_size = len(self.stateIntMap)
 
         self.model = vomm.ppm()
-
-        self.model.fit(np.array(stateBuilder.convertedSongs).flatten(), d=order, alphabet_size=alphabet_size)
+        flatList = []
+        for currentList in stateBuilder.convertedSongs:
+            flatList += currentList
+        # [flatList += currentList for currentList in stateBuilder.convertedSongs]
+        # flattened = np.array(stateBuilder.convertedSongs).flatten()
+        
+        self.model.fit(flatList, d=order, alphabet_size=alphabet_size)
 
 
         self.inverseMap = {v: k for k, v in self.stateIntMap.items()}
@@ -26,7 +31,6 @@ class MarkovBuilder():
         # num beats are subdivisible by 4
         unmappedSong = self.model.generate_data(length=songLength)
         img = np.array([np.array(pickle.loads(self.inverseMap[stateNum])) for stateNum in unmappedSong])
-        print(img.shape)
         img = np.transpose(img, (1, 0, 2))
         imsave(songName, img)
 

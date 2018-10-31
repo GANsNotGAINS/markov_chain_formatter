@@ -8,17 +8,25 @@ from scipy.misc import imsave
 class MIDI2PIXConverter():
     # currently only works on
 
-    def __init__(self, input_file, format='musicxml', resolution=5):
+    def __init__(self, input_file, format='musicxml', resolution=5, debug=False):
         self.input_file = input_file
         self.score = music21.converter.parse(input_file, format=format)
+
+        self.relative = self.score.analyze('key').getRelativeMajor().getTonic().midi % 12
+        if self.relative > 6:
+            self.relative = 12 - self.relative
+
         self.wholeLength = 4
         self.lengths = [self.wholeLength / (2**i) for i in range(resolution)]
         self.octaveRange = 2
         self.minNote = 60
         self.noteRange = 12 * self.octaveRange
         self.maxNote = self.minNote + self.noteRange
+        self.debug = debug
 
-    def buildImage(self, saveImage=True):
+    def buildImage(self):
+        if self.debug:
+            print("Parsing", self.input_file)
         main_score = self.score.parts[0]
         note_rest_iterator = main_score.recurse().notesAndRests
 
@@ -29,33 +37,41 @@ class MIDI2PIXConverter():
             col = [(0,0,0) for _ in range(self.noteRange)]
             # hoping there are no tied whole notes...
             scaled_length = int(self.roundFraction(note_rest.duration.quarterLength) * 255 / self.wholeLength)
-            if note_rest.isRest:
-                col[0] = (scaled_length, 0, 0)
-            else:
-                note = None
-                if note_rest.__module__ == 'music21.chord':
-                    note = note_rest.pitches[-1].midi
-                elif hasattr(note_rest, 'getFirst'):
-                    print("get first")
-                    note = note_rest.getFirst().pitch.midi
+            try:
+                if note_rest.isRest:
+                    col[0] = (scaled_length, 0, 0)
                 else:
-                    note = note_rest.pitch.midi
+                    note = None
+                    if note_rest.__module__ == 'music21.chord':
+                        note = note_rest.pitches[-1].midi
+                    elif hasattr(note_rest, 'getFirst'):
+                        print("get first")
+                        note = note_rest.getFirst().pitch.midi
+                    else:
+                        note = note_rest.pitch.midi
 
-                index = self.scaleNoteToRange(note) - self.minNote
-                col[index] = (0, 0, scaled_length)
+                    index = self.scaleNoteToRange(note + self.relative) - self.minNote
+                    col[index] = (0, 0, scaled_length)
 
-            i += 1
-            output.append(col)
+
+                i += 1
+                output.append(col)
+            except:
+                pass
 
         transpose = np.array(output).transpose(1, 0, 2)
 
         print(transpose.shape)
 
-        if saveImage:
-            imageName = os.path.splitext(self.input_file)[0] + '.png'
-            imsave(imageName, transpose)
+        # if saveImage:
+        #     imageName = os.path.splitext(self.input_file)[0] + '.png'
+        #     imsave(imageName, transpose)
 
-        return transpose
+        # return transpose
+
+        imageName = os.path.splitext(self.input_file)[0] + '.png'
+        imsave(imageName, transpose)
+        return imageName
 
     def scaleNoteToRange(self, noteMidi):
         while noteMidi >= self.maxNote:
@@ -79,4 +95,4 @@ class MIDI2PIXConverter():
 
 if __name__ == '__main__':
     c = MIDI2PIXConverter('mega.mxl', 'musicxml')
-    c.buildImage()
+    # c.buildImage()
